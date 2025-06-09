@@ -11,7 +11,8 @@ export const buntPlugin: BunPlugin = {
   setup(build) {
     build.onLoad({ filter: /\.bnt$/ }, async ({ path }) => {
       const src = await Bun.file(path).text();
-      const id = path.split("/").pop()?.replace(/\.bnt$/, "");
+      const pathUtil = await import("node:path");
+      const id = pathUtil.basename(path, ".bnt");
       const res = compile(src, id);
       if (res.isErr()) {
         throw new Error(`${path}: ${res.error.message}`);

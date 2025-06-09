@@ -47,7 +47,7 @@ class Parser {
       }
     }
     if (stopTypes.length > 0) {
-        throw new ParseError(`Expected closing tag for ${stopTypes.join(" or ")}`, this.pos);
+        throw new ParseError(`Expected closing tag for ${stopTypes.join(" or ")}`, this.peek().position);
     }
     return ast;
   }
@@ -116,7 +116,7 @@ class Parser {
       this.consume(TokenType.GreaterThan, "Expected '>' after '|'.");
       pipes.push(this.consume(TokenType.Identifier, "Expected pipe name.").value);
     }
-    return { kind: "expr", raw: "", path, pipes };
+    return { kind: "expr", path, pipes };
   }
 
   private match(...types: TokenType[]): boolean {
