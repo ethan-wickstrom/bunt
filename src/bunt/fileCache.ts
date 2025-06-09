@@ -1,6 +1,5 @@
-import { writeFile, unlink } from "node:fs/promises";
-import { join, resolve, relative, dirname } from "node:path";
-import { existsSync } from "node:fs";
+import { unlink, mkdir } from "node:fs/promises";
+import { join } from "node:path";
 import type { CompileSuccess } from "./types";
 import type { RenderFn } from "./cache";
 
@@ -15,24 +14,15 @@ import type { RenderFn } from "./cache";
  * @returns A promise that resolves to the executable render function.
  */
 export async function loadFromDiskCache(key: string, compiled: CompileSuccess): Promise<RenderFn> {
-  let { source } = compiled;
+  const { source } = compiled;
 
   // Ensure .bunt-cache directory exists
   const cacheDir = join(__dirname, ".bunt-cache");
-  if (!existsSync(cacheDir)) {
-    // Using Bun.write to create a directory is a common pattern.
-    await Bun.write(`${cacheDir}/.keep`, "");
-  }
+  await mkdir(cacheDir, { recursive: true });
 
   // Write the generated source to a cache file in .bunt-cache
   const cacheFile = join(cacheDir, `bunt-tpl-${key}.ts`);
-
-  // Compute the relative path from the cache file to helpers.ts
-  const helpersPath = resolve(__dirname, "./helpers.ts");
-  const relHelpersPath = relative(dirname(cacheFile), helpersPath).replace(/\\/g, "/");
-  source = source.replace("../helpers", relHelpersPath.startsWith(".") ? relHelpersPath : `./${relHelpersPath}`);
-
-  await writeFile(cacheFile, source, "utf8");
+  await Bun.write(cacheFile, source);
 
   try {
     // Use Bun.build() to bundle the generated source
@@ -40,7 +30,6 @@ export async function loadFromDiskCache(key: string, compiled: CompileSuccess): 
       entrypoints: [cacheFile],
       target: "bun",
       format: "esm",
-      naming: `[name]-${key}.[ext]`,
       sourcemap: "none",
       minify: false,
       outdir: cacheDir,
