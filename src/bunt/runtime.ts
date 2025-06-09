@@ -2,6 +2,8 @@ import { compile } from "./compiler";
 import { templateCache } from "./cache";
 import type { Ctx } from "./types";
 
+const helpersPath = new URL("./helpers.ts", import.meta.url).href;
+
 function keyOf(tpl: string): string {
   // Convert to base36 for shorter keys
   const hash = Bun.hash.xxHash64(tpl);
@@ -20,14 +22,16 @@ export async function render(tpl: string, ctx: Ctx): Promise<string> {
     const result = compile(tpl);
     if (result.isErr()) throw new Error(result.error.message);
 
-    const { functionBody, helpersCode } = result.value;
-    
-    // The full body for our new function. It will define helpers `h`
-    // and then execute the template logic.
-    const fullRenderBody = `${helpersCode}\n${functionBody}`;
-    
-    // Create the render function in-memory. It takes one argument: `ctx`.
-    fn = new Function("ctx", fullRenderBody) as (ctx: Ctx) => string;
+    let { source, fnName } = result.value;
+
+    // use absolute path for helpers to allow resolution from data URL
+    source = source.replace("../helpers", helpersPath);
+
+    const transpiler = new Bun.Transpiler({ loader: "ts" });
+    const jsCode = transpiler.transformSync(source);
+    const withUrl = `${jsCode}\n//# sourceURL=file:///bunt/${key}.ts`;
+    const module = await import(`data:text/javascript,${encodeURIComponent(withUrl)}`);
+    fn = module[fnName] as (ctx: Ctx) => string;
     templateCache.set(key, fn);
   }
 
