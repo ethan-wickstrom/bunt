@@ -3,6 +3,7 @@ import type { AST, CompileResult, ExprNode } from "./types";
 import { ok, err } from "neverthrow";
 import { match } from "ts-pattern";
 import { standardHelpers } from "./helpers";
+import { CodeBuilder } from "./codeBuilder";
 
 /**
  * Compile a template string into a TypeScript render function.
@@ -46,27 +47,28 @@ class Compiler {
   }
 
   private compileAst(ast: AST, scope: string[]): string {
-    return ast
-      .map((node) =>
-        match(node)
-          .with({ kind: "text" }, ({ text }) => JSON.stringify(text))
-          .with({ kind: "expr" }, (expr) => this.compileExpr(expr, scope))
-          .with({ kind: "if" }, ({ condition, thenBranch, otherwise }) => {
-            const cond = this.compileExpr(condition, scope, false);
-            const thenCode = this.compileAst(thenBranch, scope);
-            const elseCode = otherwise ? this.compileAst(otherwise, scope) : '""';
-            return `(${cond} ? ${thenCode} : ${elseCode})`;
-          })
-          .with({ kind: "each" }, ({ items, as, index, body }) => {
-            const itemsCode = this.compileExpr(items, scope, false);
-            const newScope = index ? [...scope, as, index] : [...scope, as];
-            const bodyCode = this.compileAst(body, newScope);
-            const params = index ? `${as}, ${index}` : as;
-            return `(${itemsCode} || []).map((${params}) => ${bodyCode}).join("")`;
-          })
-          .exhaustive()
-      )
-      .join(" + ") || '""';
+    let builder = new CodeBuilder();
+    for (const node of ast) {
+      const snippet = match(node)
+        .with({ kind: "text" }, ({ text }) => JSON.stringify(text))
+        .with({ kind: "expr" }, expr => this.compileExpr(expr, scope))
+        .with({ kind: "if" }, ({ condition, thenBranch, otherwise }) => {
+          const cond = this.compileExpr(condition, scope, false);
+          const thenCode = this.compileAst(thenBranch, scope);
+          const elseCode = otherwise ? this.compileAst(otherwise, scope) : '""';
+          return `(${cond} ? ${thenCode} : ${elseCode})`;
+        })
+        .with({ kind: "each" }, ({ items, as, index, body }) => {
+          const itemsCode = this.compileExpr(items, scope, false);
+          const newScope = index ? [...scope, as, index] : [...scope, as];
+          const bodyCode = this.compileAst(body, newScope);
+          const params = index ? `${as}, ${index}` : as;
+          return `(${itemsCode} || []).map((${params}) => ${bodyCode}).join("")`;
+        })
+        .exhaustive();
+      builder = builder.add(snippet);
+    }
+    return builder.build();
   }
 
   private compileExpr(expr: ExprNode, scope: string[], withWrapper = true): string {
