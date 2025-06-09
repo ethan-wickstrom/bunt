@@ -25,10 +25,8 @@ These are project-specific guidelines for developing the "Bunt" templating engin
 - **Iterative & Test-Driven:** The development process is iterative. After each code change, run the test suite (`bun test`) to validate the changes and identify regressions. Use failing tests to guide the next implementation step.
 - **Problem Solving:** When encountering persistent issues (like the parser implementation), step back and devise a new, more robust strategy rather than attempting repeated small fixes.
 
-## Project Architecture
-- **`parser.ts`:** Responsible for converting the template source code into an Abstract Syntax Tree (AST). This involves a tokenizer to create a token stream and a parser to build the tree.
-- **`compiler.ts`:** Compiles the AST into an executable TypeScript function string.
-- **`runtime.ts`:** Provides a dynamic `render` function that uses the compiler and `Bun.Transpiler` to execute templates at runtime.
-- **`types.ts`:** Contains all shared type definitions for the AST nodes, tokens, and public API.
-- **`helpers.ts`:** A standard library of helper functions available in all templates.
-- **`bunt.test.ts`:** The main test file for the entire engine. All tests must pass before a feature is considered complete.
+## Architectural Analysis
+- **Start with Types:** Begin by analyzing `types.ts` to understand the core data structures and domain model of the system. The types are the foundation of the architecture.
+- **Follow the Data Flow:** Trace the flow of data through the system. For Bunt, this means following the compilation pipeline: `Tokenizer` -> `Parser` -> `Compiler` -> `Runtime`.
+- **Identify Core Components:** For each stage of the pipeline, identify the key classes and functions and understand their single responsibility.
+- **Consult Tests:** Use the test files (e.g., `bunt.test.ts`, `tokenizer.test.ts`) to understand the expected inputs and outputs of each component.
