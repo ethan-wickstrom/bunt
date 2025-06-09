@@ -22,6 +22,7 @@ These are project-specific guidelines for developing the "Bunt" templating engin
 
 ## Development Workflow
 - **Plan, Then Act:** Begin with a clear, comprehensive, and well-reasoned plan before writing code. The user will approve the plan before switching to "Act Mode".
+- **Type-First Implementation:** When adding or modifying features, consider the full impact on the type system first. If a change requires modifying a function signature, update the relevant types and function signatures across all affected files *before* implementing the new logic. This proactive approach minimizes cascading type errors.
 - **Iterative & Test-Driven:** The development process is iterative. After each code change, run the test suite (`bun test`) to validate the changes and identify regressions. Use failing tests to guide the next implementation step.
 - **Problem Solving:** When encountering persistent issues (like the parser implementation), step back and devise a new, more robust strategy rather than attempting repeated small fixes.
 

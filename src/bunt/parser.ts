@@ -1,4 +1,4 @@
-import type { AST, ExprNode, IfNode, EachNode } from "./types";
+import type { AST, ExprNode, IfNode, EachNode, PartialNode } from "./types";
 import { type Result, ok, err } from "neverthrow";
 import { tokenize, type Token } from "./tokenizer";
 import { isIdentifierToken, isTextToken } from "./utils";
@@ -64,12 +64,17 @@ class Parser {
     return ast;
   }
 
-  private parseTag(): IfNode | EachNode | ExprNode {
+  private parseTag(): IfNode | EachNode | ExprNode | PartialNode {
     this.consume("open-tag", "Expected '{{'.");
+
+    if (this.match("greater-than")) {
+      return this.parsePartial();
+    }
     
     if (this.match("hash")) {
       if (this.match("if")) return this.parseIf();
       if (this.match("each")) return this.parseEach();
+      if (this.match("partial")) return this.parsePartialBlock();
       throw new ParseError("Unknown block tag after #", this.peek().position);
     }
 
@@ -118,6 +123,51 @@ class Parser {
     this.consume("each", "Expected 'each'.");
     this.consume("close-tag", "Expected '}}'.");
     return { kind: "each", items, as, index, body };
+  }
+
+  private parsePartial(): PartialNode {
+    let name: string | ExprNode;
+    if (this.match("open-paren")) {
+      name = this.parseExpr();
+      this.consume("close-paren", "Expected ')' after dynamic partial name.");
+    } else if (this.match("identifier")) {
+      const prev = this.previous();
+      const path = [isIdentifierToken(prev) ? prev.value : ""];
+      // Also handle dot-notation for partial names
+      while (this.match("dot")) {
+        const nextToken = this.consume("identifier", "Expected identifier.");
+        path.push(isIdentifierToken(nextToken) ? nextToken.value : "");
+      }
+      name = path.join(".");
+    } else {
+      throw new ParseError("Expected a partial name or a dynamic expression.", this.peek().position);
+    }
+    this.consume("close-tag", "Expected '}}'.");
+    return { kind: "partial", name };
+  }
+
+  private parsePartialBlock(): PartialNode {
+    let name: string;
+    if (this.match("identifier")) {
+      const prev = this.previous();
+      name = isIdentifierToken(prev) ? prev.value : "";
+    } else {
+      throw new ParseError("Expected a partial name.", this.peek().position);
+    }
+    
+    const params: Record<string, ExprNode> = {};
+    if (this.match("with")) {
+      do {
+        const paramToken = this.consume("identifier", "Expected parameter name.");
+        const paramName = isIdentifierToken(paramToken) ? paramToken.value : "";
+        this.consume("equals", "Expected '=' after parameter name.");
+        const value = this.parseExpr();
+        params[paramName] = value;
+      } while (this.match("comma"));
+    }
+    
+    this.consume("close-tag", "Expected '}}'.");
+    return { kind: "partial", name, params: Object.keys(params).length > 0 ? params : undefined };
   }
 
   private parseExpr(): ExprNode {

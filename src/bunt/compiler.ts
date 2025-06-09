@@ -6,6 +6,7 @@ import type {
   TextNode,
   IfNode,
   EachNode,
+  PartialNode,
   RenderOptions,
   Helpers,
 } from "./types";
@@ -57,8 +58,8 @@ class Compiler {
 
     if (this.target === "jit") {
       const source = [
-        `return function ${fnName}(ctx, customHelpers = {}) {`,
-        "  const helpers = { ...standardHelpers, ...customHelpers };",
+        `return function ${fnName}(ctx, options = {}) {`,
+        "  const helpers = { ...standardHelpers, ...options.helpers };",
         `  return ${body};`,
         "}",
       ].join("\n");
@@ -66,10 +67,11 @@ class Compiler {
     }
 
     const source = [
-      'import { standardHelpers } from "../helpers";',
-      'import type { Ctx, Helpers } from "../types";',
-      `export default function ${fnName}(ctx: Ctx, customHelpers: Helpers = {}): string {`,
-      "  const helpers = { ...standardHelpers, ...customHelpers };",
+      'import { standardHelpers } from "./helpers";',
+      'import { render } from "./runtime";',
+      'import type { Ctx, RenderOptions } from "./types";',
+      `export default function ${fnName}(ctx: Ctx, options: RenderOptions = {}): string {`,
+      "  const helpers = { ...standardHelpers, ...options.helpers };",
       `  return ${body};`,
       "}",
       "",
@@ -85,6 +87,7 @@ class Compiler {
         .with({ kind: "expr" }, (node) => this.compileExprNode(node, scope))
         .with({ kind: "if" }, (node) => this.compileIfNode(node, scope))
         .with({ kind: "each" }, (node) => this.compileEachNode(node, scope))
+        .with({ kind: "partial" }, (node) => this.compilePartialNode(node, scope))
         .exhaustive();
       builder = builder.add(snippet);
     }
@@ -112,6 +115,31 @@ class Compiler {
     const bodyCode = this.compileAst(node.body, newScope);
     const params = node.index ? `${node.as}, ${node.index}` : node.as;
     return `(${itemsCode} || []).map((${params}) => ${bodyCode}).join("")`;
+  }
+
+  private compilePartialNode(node: PartialNode, scope: string[]): string {
+    const nameCode = typeof node.name === 'string'
+      ? JSON.stringify(node.name)
+      : this.compileExpr(node.name, scope, false);
+    
+    let contextCode = "ctx";
+    if (node.params) {
+      const paramEntries = Object.entries(node.params)
+        .map(([key, expr]) => `${JSON.stringify(key)}: ${this.compileExpr(expr, scope, false)}`)
+        .join(", ");
+      contextCode = `{ ...ctx, ${paramEntries} }`;
+    }
+    
+    // This implementation is for JIT mode. AOT mode would require a different strategy.
+    return `(() => {
+      const partialName = ${nameCode};
+      const partialTpl = options.partials?.[partialName];
+      if (typeof partialTpl !== 'string') {
+        throw new Error(\`Partial '\${partialName}' not found or is not a string.\`);
+      }
+      // We need to call the top-level render function recursively
+      return render(partialTpl, ${contextCode}, options);
+    })()`;
   }
 
   private compileExpr(expr: ExprNode, scope: string[], withWrapper = true): string {

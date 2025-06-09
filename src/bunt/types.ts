@@ -39,8 +39,17 @@ export type EachNode = {
   body: AST;
 };
 
+/** A partial/include block. */
+export type PartialNode = {
+  kind: "partial";
+  /** Name or path of the partial to include. Can be a literal string or a dynamic expression. */
+  name: string | ExprNode;
+  /** Optional context/parameters to pass. */
+  params?: Record<string, ExprNode>;
+};
+
 /** Full template AST. */
-export type AST = Array<TextNode | ExprNode | IfNode | EachNode>;
+export type AST = Array<TextNode | ExprNode | IfNode | EachNode | PartialNode>;
 
 /** A generic context object for type-safe templates. */
 export type Ctx = Record<string, unknown>;
@@ -64,6 +73,16 @@ export type CompileFailure = {
 /** A map of helper functions. */
 export type Helpers = Record<string, (...args: never[]) => unknown>;
 
+/** A function that resolves a partial name to its template string. */
+export type PartialResolver = (name: string) => string | Promise<string>;
+
+/** The signature for the top-level render function. */
+export type TopLevelRenderFn = (
+  tpl: string,
+  ctx: Ctx,
+  options?: RenderOptions
+) => string;
+
 /** Options for the render function. */
 export type RenderOptions = {
   helpers?: Helpers;
@@ -73,6 +92,10 @@ export type RenderOptions = {
    * 'jit' - generates a function body for just-in-time compilation.
    */
   target?: "module" | "jit";
+  /** A map of pre-loaded partial templates. */
+  partials?: Record<string, string>;
+  /** A function to dynamically load partials. */
+  partialResolver?: PartialResolver;
 };
 
 /** Result type for compile(). */

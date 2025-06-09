@@ -10,10 +10,15 @@ export type Token =
   | { type: "each"; position: number }
   | { type: "else"; position: number }
   | { type: "as"; position: number }
+  | { type: "partial"; position: number }
+  | { type: "with"; position: number }
   | { type: "pipe"; position: number }
   | { type: "dot"; position: number }
   | { type: "slash"; position: number }
   | { type: "comma"; position: number }
+  | { type: "equals"; position: number }
+  | { type: "open-paren"; position: number }
+  | { type: "close-paren"; position: number }
   | { type: "greater-than"; position: number }
   | { type: "hash"; position: number }
   | { type: "eof"; position: number };
@@ -28,10 +33,15 @@ export const Token = {
   each: (position: number): Token => ({ type: "each", position }),
   else: (position: number): Token => ({ type: "else", position }),
   as: (position: number): Token => ({ type: "as", position }),
+  partial: (position: number): Token => ({ type: "partial", position }),
+  with: (position: number): Token => ({ type: "with", position }),
   pipe: (position: number): Token => ({ type: "pipe", position }),
   dot: (position: number): Token => ({ type: "dot", position }),
   slash: (position: number): Token => ({ type: "slash", position }),
   comma: (position: number): Token => ({ type: "comma", position }),
+  equals: (position: number): Token => ({ type: "equals", position }),
+  openParen: (position: number): Token => ({ type: "open-paren", position }),
+  closeParen: (position: number): Token => ({ type: "close-paren", position }),
   greaterThan: (position: number): Token => ({ type: "greater-than", position }),
   hash: (position: number): Token => ({ type: "hash", position }),
   eof: (position: number): Token => ({ type: "eof", position }),
@@ -143,6 +153,18 @@ export class Tokenizer {
           this.tokens.push(Token.comma(this.pos));
           this.pos++;
           break;
+        case "=":
+          this.tokens.push(Token.equals(this.pos));
+          this.pos++;
+          break;
+        case "(":
+          this.tokens.push(Token.openParen(this.pos));
+          this.pos++;
+          break;
+        case ")":
+          this.tokens.push(Token.closeParen(this.pos));
+          this.pos++;
+          break;
         case ">":
           this.tokens.push(Token.greaterThan(this.pos));
           this.pos++;
@@ -205,6 +227,9 @@ export class Tokenizer {
       case "each":
         this.tokens.push(Token.each(start));
         break;
+      case "partial":
+        this.tokens.push(Token.partial(start));
+        break;
       default:
         return err({
           type: "unknown-keyword",
@@ -230,6 +255,9 @@ export class Tokenizer {
         break;
       case "as":
         this.tokens.push(Token.as(start));
+        break;
+      case "with":
+        this.tokens.push(Token.with(start));
         break;
       default:
         this.tokens.push(Token.identifier(text, start));

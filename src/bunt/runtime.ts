@@ -24,9 +24,9 @@ export function render(
       throw new Error(result.error.message);
     }
 
-    fn = JIT(result.value);
+    fn = JIT(result.value, render); // Pass render for recursion
     templateCache.set(key, fn);
   }
 
-  return fn(ctx, options.helpers);
+  return fn(ctx, options);
 }
