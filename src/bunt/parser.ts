@@ -1,6 +1,7 @@
 import type { AST, ExprNode, IfNode, EachNode } from "./types";
 import { type Result, ok, err } from "neverthrow";
-import { tokenize, type Token, isTextToken, isIdentifierToken } from "./tokenizer";
+import { tokenize, type Token } from "./tokenizer";
+import { isIdentifierToken, isTextToken } from "./utils";
 
 export function parse(
   src: string
