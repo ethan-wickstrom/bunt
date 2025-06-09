@@ -42,7 +42,7 @@ class Compiler {
     const source = [
       'import { standardHelpers } from "../helpers";',
       'import type { Ctx } from "../types";',
-      `export function ${fnName}(ctx: Ctx): string {`,
+      `export default function ${fnName}(ctx: Ctx): string {`,
       "  const helpers = { ...standardHelpers, ...ctx };",
       `  return ${body};`,
       "}",
