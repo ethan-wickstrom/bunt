@@ -1,2 +1,5 @@
 [build]
+entrypoints = ["src/index.ts", "src/bunt/cli.ts"]
+outdir = "./dist"
+format = "esm"
 plugins = ["./src/plugin.ts"]

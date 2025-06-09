@@ -1,9 +1,43 @@
 {
   "name": "bunt",
-  "module": "src/index.ts",
+  "version": "0.1.0",
+  "description": "A modern, type-safe templating engine for Bun.",
+  "author": "Your Name",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ethan-wickstrom/bunt.git"
+  },
+  "keywords": [
+    "bun",
+    "template",
+    "templating-engine",
+    "typescript"
+  ],
+  "main": "dist/index.js",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
   "type": "module",
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "bin": {
-    "bunt": "src/bunt/cli.ts"
+    "bunt": "dist/cli.js"
+  },
+  "scripts": {
+    "build": "bun build",
+    "test": "bun test",
+    "lint": "bunx biome check .",
+    "format": "bunx biome format . --write",
+    "prepublishOnly": "bun run build"
+  },
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
   },
   "devDependencies": {
     "@biomejs/biome": "1.9.4",

@@ -1,0 +1,63 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Cache Bun Dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('**/bun.lockb') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: Install Dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Run Linter
+        run: bunx biome check .
+
+      - name: Run Tests
+        run: bun test
+
+      - name: Build Project
+        run: bun run build
+
+      - name: Publish to npm
+        run: bun publish --token ${{ secrets.NPM_TOKEN }}
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: Release ${{ github.ref }}
+          draft: false
+          prerelease: false
+
+      - name: Build and Upload Binaries
+        run: |
+          bun build --compile --outfile bunt-linux-x64 src/bunt/cli.ts --target=linux-x64
+          bun build --compile --outfile bunt-macos-x64 src/bunt/cli.ts --target=darwin-x64
+          bun build --compile --outfile bunt-windows-x64.exe src/bunt/cli.ts --target=windows-x64
+          gh release upload ${{ github.ref }} bunt-linux-x64 bunt-macos-x64 bunt-windows-x64.exe
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
