@@ -90,7 +90,7 @@ export type TopLevelRenderFn = (
   tpl: string,
   ctx: Ctx,
   options?: RenderOptions
-) => string;
+) => Promise<string>;
 
 /** Options for the render function. */
 export type RenderOptions = {

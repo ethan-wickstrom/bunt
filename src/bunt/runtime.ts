@@ -10,11 +10,11 @@ function keyOf(tpl: string, options: RenderOptions): string {
   return hash.toString(36);
 }
 
-export function render(
+export async function render(
   tpl: string,
   ctx: Ctx,
   options: RenderOptions = {}
-): string {
+): Promise<string> {
   const key = keyOf(tpl, options);
   let fn = templateCache.get(key);
 
