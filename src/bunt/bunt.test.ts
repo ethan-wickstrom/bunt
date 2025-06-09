@@ -1,107 +1,100 @@
-import { describe, it, expect, beforeAll } from "bun:test";
-import { buntPlugin } from ".";
-import type { TemplateFn } from "./types";
-import { rm } from "node:fs/promises";
-import { join } from "node:path";
+import { describe, it, expect } from "bun:test";
+import { compile } from "./compiler";
+import { render } from "./runtime";
 
-const outdir = join(import.meta.dir, "test-build");
-
-type BasicProps = {
-  name: string;
-  html: string;
-  items: string[];
-  show: boolean;
-};
-
-// This will be our dynamically imported render function
-let render: TemplateFn<BasicProps>;
-
-beforeAll(async () => {
-  // Clean up previous builds
-  await rm(outdir, { recursive: true, force: true });
-
-  const result = await Bun.build({
-    entrypoints: [join(import.meta.dir, "test-templates/basic.bunt")],
-    outdir,
-    plugins: [buntPlugin],
-    naming: "[dir]/[name].js",
-  });
-
-  if (!result.success) {
-    console.error(result.logs);
-    throw new Error("Build failed");
-  }
-
-  // Dynamically import the compiled module
-  const modulePath = join(outdir, "basic.js");
-  const module = await import(modulePath);
-  render = module.render;
-});
-
-describe("bunt", () => {
-  it("should render a template with all features", () => {
-    const props: BasicProps = {
-      name: "World",
-      html: "<strong>raw</strong>",
-      items: ["one", "two"],
-      show: true,
-    };
-
-    const result = render(props);
-
-    expect(result.isOk()).toBe(true);
-    const output = result._unsafeUnwrap();
-
-    expect(output).toContain("Hello, World!");
-    expect(output).toContain("<strong>raw</strong>");
-    expect(output).toContain("<li>one</li>");
-    expect(output).toContain("<li>two</li>");
-    expect(output).not.toContain("Nothing to see here.");
-  });
-
-  it("should handle conditional logic correctly", () => {
-    const props: BasicProps = {
-      name: "World",
-      html: "<strong>raw</strong>",
-      items: ["one", "two"],
-      show: false,
-    };
-
-    const result = render(props);
-    expect(result.isOk()).toBe(true);
-    const output = result._unsafeUnwrap();
-
-    expect(output).not.toContain("<ul>");
-    expect(output).toContain("<p>Nothing to see here.</p>");
-  });
-
-  it("should escape HTML correctly", async () => {
-    const template = `---
-type Props = { html: string };
----
-<%= props.html %>`;
-    const templatePath = join(outdir, "escape-test.bunt");
-    await Bun.write(templatePath, template);
-
-    const buildResult = await Bun.build({
-        entrypoints: [templatePath],
-        outdir: join(outdir, "escape-build"),
-        plugins: [buntPlugin],
-        naming: "[name].js",
-        root: outdir,
+describe("Bunt Templating Engine", () => {
+  describe("Compiler", () => {
+    it("should compile a simple template", () => {
+      const res = compile("Hello, {{name}}!");
+      expect(res.isOk()).toBe(true);
+      if (res.isOk()) {
+        expect(res.value.source).toContain("export function render_Template");
+        expect(res.value.source).toContain('return "Hello, " + (ctx.name');
+      }
     });
 
-    if (!buildResult.success) {
-        console.error(buildResult.logs);
-        throw new Error("Build failed for escape test");
-    }
+    it("should handle conditionals", () => {
+      const res = compile("{{#if user.isLoggedIn}}Welcome, {{user.name}}{{/if}}");
+      expect(res.isOk()).toBe(true);
+      if (res.isOk()) {
+        expect(res.value.source).toContain('ctx.user.isLoggedIn ? "Welcome, "');
+      }
+    });
 
-    const modulePath = join(outdir, "escape-build/escape-test.js");
-    const module = await import(modulePath);
-    const renderFn = module.render as TemplateFn<{html: string}>;
-    const result = renderFn({ html: "<h1>Hello</h1>" });
+    it("should handle conditionals with an else block", () => {
+      const res = compile("{{#if user.isLoggedIn}}Welcome, {{user.name}}{{else}}Please log in.{{/if}}");
+      expect(res.isOk()).toBe(true);
+      if (res.isOk()) {
+        expect(res.value.source).toContain('? "Welcome, "');
+        expect(res.value.source).toContain(': "Please log in."');
+      }
+    });
 
-    expect(result.isOk()).toBe(true);
-    expect(result._unsafeUnwrap()).toBe("<h1>Hello</h1>");
+    it("should handle loops", () => {
+      const res = compile("{{#each users as |user|}}{{user.name}}{{/each}}");
+      expect(res.isOk()).toBe(true);
+      if (res.isOk()) {
+        expect(res.value.source).toContain('(ctx.users || []).map((user) =>');
+      }
+    });
+
+    it("should handle loops with an index", () => {
+      const res = compile("{{#each users as |user, i|}}{{i}}: {{user.name}}{{/each}}");
+      expect(res.isOk()).toBe(true);
+      if (res.isOk()) {
+        expect(res.value.source).toContain('(ctx.users || []).map((user, i) =>');
+      }
+    });
+
+    it("should handle pipes", () => {
+        const res = compile("{{ name |> upper }}");
+        expect(res.isOk()).toBe(true);
+        if (res.isOk()) {
+            expect(res.value.source).toContain("helpers.upper(ctx.name)");
+        }
+    });
+  });
+
+  describe("Runtime", () => {
+    it("should render a simple template", async () => {
+      const output = await render("Hello, {{name}}!", { name: "World" });
+      expect(output).toBe("Hello, World!");
+    });
+
+    it("should render conditionals", async () => {
+      const tpl = "{{#if user.isLoggedIn}}Welcome, {{user.name}}{{else}}Please log in.{{/if}}";
+      const output1 = await render(tpl, { user: { isLoggedIn: true, name: "Cline" } });
+      expect(output1).toBe("Welcome, Cline");
+      const output2 = await render(tpl, { user: { isLoggedIn: false } });
+      expect(output2).toBe("Please log in.");
+    });
+
+    it("should render loops", async () => {
+      const tpl = "{{#each users as |user|}}{{user.name}}, {{/each}}";
+      const output = await render(tpl, { users: [{ name: "Alice" }, { name: "Bob" }] });
+      expect(output).toBe("Alice, Bob, ");
+    });
+
+    it("should render loops with an index", async () => {
+        const tpl = "{{#each users as |user, i|}}{{i}}:{{user.name}} {{/each}}";
+        const output = await render(tpl, { users: [{ name: "Alice" }, { name: "Bob" }] });
+        expect(output).toBe("0:Alice 1:Bob ");
+    });
+
+    it("should use pipe helpers", async () => {
+        const output = await render("{{ name |> upper }}", { name: "cline" });
+        expect(output).toBe("CLINE");
+    });
+
+    it("should throw an error for missing values", async () => {
+        let didThrow = false;
+        try {
+            await render("{{name}}", {});
+        } catch (e) {
+            didThrow = true;
+            expect((e as Error).message).toContain("Missing `name`");
+        }
+        expect(didThrow).toBe(true);
+    });
   });
 });

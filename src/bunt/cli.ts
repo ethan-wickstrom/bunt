@@ -1,18 +1,44 @@
-import { compile } from ".";
+#!/usr/bin/env bun
+
 import { Glob } from "bun";
+import { compile } from "./compiler";
+import { mkdir } from "node:fs/promises";
+import { dirname } from "node:path";
 
-const glob = new Glob("**/*.bunt");
+const USAGE = "Usage: bun-templates <glob>";
 
-for await (const file of glob.scan(".")) {
-  const content = await Bun.file(file).text();
-  const compiled = compile(content);
-
-  if (compiled.isErr()) {
-    console.error(`Error compiling ${file}:`, compiled.error);
-    continue;
+/** Simple CLI: `bun-templates <glob>` */
+async function main() {
+  const args = process.argv.slice(2);
+  if (args.length === 0) {
+    console.error(USAGE);
+    process.exit(1);
   }
 
-  const tsPath = file.replace(/\.bunt$/, ".bunt.ts");
-  await Bun.write(tsPath, compiled.value.code);
-  console.log(`Compiled ${file} to ${tsPath}`);
+  const pattern = args[0];
+  if (!pattern) {
+    console.error(USAGE);
+    process.exit(1);
+  }
+
+  const glob = new Glob(pattern);
+  for await (const file of glob.scan(".")) {
+    if (!file.endsWith(".bnt")) continue;
+    const src = await Bun.file(file).text();
+    const id = file.replace(/\.bnt$/, "");
+    const res = compile(src, id);
+    if (res.isErr()) {
+      console.error(`✖ ${file}: ${res.error.message}`);
+      continue;
+    }
+    const outPath = file.replace(/\.bnt$/, ".ts");
+    await mkdir(dirname(outPath), { recursive: true });
+    await Bun.write(outPath, res.value.source);
+    console.log(`✔ ${outPath}`);
+  }
 }
+
+main().catch(err => {
+  console.error(err);
+  process.exit(1);
+});
