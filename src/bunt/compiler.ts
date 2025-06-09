@@ -29,7 +29,6 @@ export function compile(
 class Compiler {
   private readonly templateId: string;
   private readonly ast: AST;
-  private ctxKeys = new Set<string>();
 
   constructor(templateId: string, ast: AST) {
     this.templateId = templateId;
@@ -39,63 +38,53 @@ class Compiler {
   public compile(): CompileResult {
     const body = this.compileAst(this.ast, []);
     const fnName = `render_${this.templateId.replace(/[^\w]/g, "_")}`;
-
-    // Include minimal helpers directly in the generated code for runtime usage
-    const helpersCode = `const h={upper:v=>String(v).toUpperCase(),lower:v=>String(v).toLowerCase(),capitalize:v=>{const s=String(v);return s.charAt(0).toUpperCase()+s.slice(1)},truncate:(v,l=20)=>{const s=String(v);return s.length>l?s.slice(0,l)+'...':s},json:v=>JSON.stringify(v),date:(v,loc,opt)=>{const d=v instanceof Date?v:new Date(String(v));return d.toLocaleDateString(loc,opt)},escapeHtml:v=>String(v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')};`;
-
+    const helpersCode =
+      "const h={upper:v=>String(v).toUpperCase(),lower:v=>String(v).toLowerCase(),capitalize:v=>{const s=String(v);return s.charAt(0).toUpperCase()+s.slice(1)},truncate:(v,l=20)=>{const s=String(v);return s.length>l?s.slice(0,l)+'...':s},json:v=>JSON.stringify(v),date:(v,loc,opt)=>{const d=v instanceof Date?v:new Date(String(v));return d.toLocaleDateString(loc,opt)},escapeHtml:v=>String(v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\"/g,'&quot;').replace(/'/g,'&#39;')};";
     const source = `${helpersCode}export function ${fnName}(ctx){const helpers={...h,...ctx};return ${body}}`;
     return ok({ source, fnName });
   }
 
   private compileAst(ast: AST, scope: string[]): string {
-    const parts: string[] = [];
-    for (const node of ast) {
-      match(node)
-        .with({ kind: "text" }, ({ text }) => {
-          parts.push(JSON.stringify(text));
-        })
-        .with({ kind: "expr" }, (expr) => {
-          parts.push(this.compileExpr(expr, scope));
-        })
-        .with({ kind: "if" }, ({ condition, thenBranch, otherwise }) => {
-          const conditionCode = this.compileExpr(condition, scope, false);
-          const thenCode = this.compileAst(thenBranch, scope);
-          const otherwiseCode = otherwise ? this.compileAst(otherwise, scope) : '""';
-          parts.push(`(${conditionCode} ? ${thenCode} : ${otherwiseCode})`);
-        })
-        .with({ kind: "each" }, ({ items, as, index, body }) => {
-          const itemsCode = this.compileExpr(items, scope, false);
-          const newScope = [...scope, as];
-          if (index) newScope.push(index);
-          const bodyCode = this.compileAst(body, newScope);
-          const params = index ? `${as}, ${index}` : as;
-          parts.push(`(${itemsCode} || []).map((${params}) => ${bodyCode}).join("")`);
-        })
-        .exhaustive();
-    }
-    return parts.length > 0 ? parts.join(" + ") : '""';
+    return ast
+      .map((node) =>
+        match(node)
+          .with({ kind: "text" }, ({ text }) => JSON.stringify(text))
+          .with({ kind: "expr" }, (expr) => this.compileExpr(expr, scope))
+          .with({ kind: "if" }, ({ condition, thenBranch, otherwise }) => {
+            const cond = this.compileExpr(condition, scope, false);
+            const thenCode = this.compileAst(thenBranch, scope);
+            const elseCode = otherwise ? this.compileAst(otherwise, scope) : '""';
+            return `(${cond} ? ${thenCode} : ${elseCode})`;
+          })
+          .with({ kind: "each" }, ({ items, as, index, body }) => {
+            const itemsCode = this.compileExpr(items, scope, false);
+            const newScope = index ? [...scope, as, index] : [...scope, as];
+            const bodyCode = this.compileAst(body, newScope);
+            const params = index ? `${as}, ${index}` : as;
+            return `(${itemsCode} || []).map((${params}) => ${bodyCode}).join("")`;
+          })
+          .exhaustive()
+      )
+      .join(" + ") || '""';
   }
 
-  private compileExpr(expr: ExprNode, scope: string[], withWrapper: boolean = true): string {
-    const firstPath = expr.path[0];
-    if (firstPath && !Object.keys(standardHelpers).includes(firstPath) && !scope.includes(firstPath)) {
-      this.ctxKeys.add(firstPath);
-    }
-    
-    let exprCode = `helpers.${expr.path.join(".")}`;
-    if (scope.includes(firstPath ?? '')) {
-        exprCode = expr.path.join(".");
-    } else if (expr.path.length > 1 || (firstPath && !Object.keys(standardHelpers).includes(firstPath))) {
-      exprCode = `ctx.${expr.path.join(".")}`;
-    }
-    
+  private compileExpr(expr: ExprNode, scope: string[], withWrapper = true): string {
+    const first = expr.path[0];
+    const isHelper = first && Object.hasOwn(standardHelpers, first);
+    const isScoped = first && scope.includes(first);
+    let code = isScoped
+      ? expr.path.join(".")
+      : isHelper && expr.path.length === 1
+      ? `helpers.${first}`
+      : `ctx.${expr.path.join(".")}`;
     for (const pipe of expr.pipes) {
-      exprCode = `helpers.${pipe}(${exprCode})`;
+      code = `helpers.${pipe}(${code})`;
     }
-
     if (withWrapper) {
-      return `(${exprCode} !== undefined && ${exprCode} !== null ? ${exprCode} : (() => { throw new Error("Missing \`${expr.path.join(".")}\`"); })())`;
+      // Use single quotes for the error message to avoid nested backtick issues
+      const pathStr = expr.path.join('.')
+      return `(${code} !== undefined && ${code} !== null ? ${code} : (() => { throw new Error('Missing ${pathStr}'); })())`;
     }
-    return exprCode;
+    return code;
   }
 }
