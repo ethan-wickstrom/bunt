@@ -9,7 +9,7 @@ describe("Bunt Templating Engine", () => {
       expect(res.isOk()).toBe(true);
       if (res.isOk()) {
         expect(res.value.source).toContain("export default function render_Template");
-        expect(res.value.source).toContain('return "Hello, " + (ctx.name');
+        expect(res.value.source).toContain('return "Hello, " + helpers.escapeHtml((ctx.name');
       }
     });
 
@@ -58,7 +58,7 @@ describe("Bunt Templating Engine", () => {
       const res = compile("{{#each items as |item|}}{{#each item.sub as |sub|}}{{sub}}{{/each}}{{/each}}");
       expect(res.isOk()).toBe(true);
       if (res.isOk()) {
-        expect(res.value.source).toContain('(ctx.items || []).map((item) => (item.sub || []).map((sub) => (sub');
+        expect(res.value.source).toContain('(ctx.items || []).map((item) => (item.sub || []).map((sub) => helpers.escapeHtml((sub');
       }
     });
 
@@ -75,14 +75,6 @@ describe("Bunt Templating Engine", () => {
         expect(res.isOk()).toBe(true);
         if (res.isOk()) {
             expect(res.value.source).toContain("helpers.capitalize(helpers.lower(ctx.name))");
-        }
-    });
-
-    it("should handle html escaping", () => {
-        const res = compile("{{ content |> escapeHtml }}");
-        expect(res.isOk()).toBe(true);
-        if (res.isOk()) {
-            expect(res.value.source).toContain("helpers.escapeHtml(ctx.content)");
         }
     });
 
@@ -172,13 +164,8 @@ describe("Bunt Templating Engine", () => {
         expect(output).toBe("Cline");
     });
 
-    it("should escape html", () => {
-        const output = render("{{ content |> escapeHtml }}", { content: "<script>alert('xss')</script>" });
-        expect(output).toBe("&lt;script&gt;alert(&#39;xss&#39;)&lt;/script&gt;");
-    });
-
     it("should use various standard helpers", () => {
-        const tpl = '{{ a |> lower }}, {{ b |> capitalize }}, {{ c |> truncate }}, {{ d |> json }}, {{ e |> date }}';
+        const tpl = '{{{ a |> lower }}}, {{{ b |> capitalize }}}, {{{ c |> truncate }}}, {{{ d |> json }}}, {{{ e |> date }}}';
         const date = new Date("2024-01-15T12:00:00.000Z");
         const data = { a: "HELLO", b: "world", c: "1234567890123456789012345", d: { x: 1 }, e: date };
         const output = render(tpl, data);
@@ -218,6 +205,44 @@ describe("Bunt Templating Engine", () => {
             expect((e as Error).message).toContain("is not a function");
         }
         expect(didThrow).toBe(true);
+    });
+  });
+
+  describe("Auto-escaping", () => {
+    it("should escape HTML by default", () => {
+      const tpl = "<div>{{content}}</div>";
+      const data = { content: "<script>alert('xss')</script>" };
+      const output = render(tpl, data);
+      expect(output).toBe(
+        "<div><script>alert(&#39;xss&#39;)</script></div>"
+      );
+    });
+
+    it("should not escape HTML when using triple braces", () => {
+      const tpl = "<div>{{{content}}}</div>";
+      const data = { content: "<p>raw html</p>" };
+      const output = render(tpl, data);
+      expect(output).toBe("<div><p>raw html</p></div>");
+    });
+
+    it("should handle mixed escaping", () => {
+      const tpl = "<div>{{escaped}}</div><div>{{{raw}}}</div>";
+      const data = {
+        escaped: "<strong>escaped</strong>",
+        raw: "<strong>raw</strong>",
+      };
+      const output = render(tpl, data);
+      expect(output).toBe(
+        "<div><strong>escaped</strong></div><div><strong>raw</strong></div>"
+      );
+    });
+
+    it("should correctly handle unclosed triple braces", () => {
+      const res = compile("{{{content");
+      expect(res.isErr()).toBe(true);
+      if (res.isErr()) {
+        expect(res.error.message).toContain("Expected '}}}' after expression.");
+      }
     });
   });
 });

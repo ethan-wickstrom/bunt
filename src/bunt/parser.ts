@@ -1,4 +1,11 @@
-import type { AST, ExprNode, IfNode, EachNode, PartialNode } from "./types";
+import type {
+  AST,
+  AccessorNode,
+  IfNode,
+  EachNode,
+  PartialNode,
+  InterpolationNode,
+} from "./types";
 import { type Result, ok, err } from "neverthrow";
 import { tokenize, type Token } from "./tokenizer";
 import { isIdentifierToken, isTextToken } from "./utils";
@@ -10,10 +17,10 @@ export function parse(
   if (tokenResult.isErr()) {
     return err({
       message: tokenResult.error.message,
-      position: tokenResult.error.position
+      position: tokenResult.error.position,
     });
   }
-  
+
   try {
     const parser = new Parser(tokenResult.value, src);
     return ok(parser.parse());
@@ -48,29 +55,41 @@ class Parser {
         if (isTextToken(token)) {
           ast.push({ kind: "text", text: token.value });
         }
-      } else if (current.type === "open-tag") {
+      } else if (
+        current.type === "open-tag" ||
+        current.type === "open-triple-tag"
+      ) {
         const nextToken = this.tokens[this.pos + 1];
         if (nextToken && stopTypes.includes(nextToken.type)) {
           return ast;
         }
         ast.push(this.parseTag());
       } else {
-        throw new ParseError(`Unexpected token ${current.type}`, current.position);
+        throw new ParseError(
+          `Unexpected token ${current.type}`,
+          current.position
+        );
       }
     }
     if (stopTypes.length > 0) {
-        throw new ParseError(`Expected closing tag for ${stopTypes.join(" or ")}`, this.peek().position);
+      throw new ParseError(
+        `Expected closing tag for ${stopTypes.join(" or ")}`,
+        this.peek().position
+      );
     }
     return ast;
   }
 
-  private parseTag(): IfNode | EachNode | ExprNode | PartialNode {
-    this.consume("open-tag", "Expected '{{'.");
+  private parseTag(): IfNode | EachNode | InterpolationNode | PartialNode {
+    const isRaw = this.match("open-triple-tag");
+    if (!isRaw) {
+      this.consume("open-tag", "Expected '{{'.");
+    }
 
     if (this.match("greater-than")) {
       return this.parsePartial();
     }
-    
+
     if (this.match("hash")) {
       if (this.match("if")) return this.parseIf();
       if (this.match("each")) return this.parseEach();
@@ -78,13 +97,17 @@ class Parser {
       throw new ParseError("Unknown block tag after #", this.peek().position);
     }
 
-    const expr = this.parseExpr();
-    this.consume("close-tag", "Expected '}}' after expression.");
-    return expr;
+    const expr = this.parseAccessor();
+    if (isRaw) {
+      this.consume("close-triple-tag", "Expected '}}}' after expression.");
+    } else {
+      this.consume("close-tag", "Expected '}}' after expression.");
+    }
+    return { kind: "interpolation", expr, raw: isRaw };
   }
 
   private parseIf(): IfNode {
-    const condition = this.parseExpr();
+    const condition = this.parseAccessor();
     this.consume("close-tag", "Expected '}}' after if condition.");
     const thenBranch = this.parseUntil(["else", "slash"]);
     let otherwise: AST | undefined;
@@ -100,12 +123,12 @@ class Parser {
     this.consume("slash", "Expected '/'.");
     this.consume("if", "Expected 'if'.");
     this.consume("close-tag", "Expected '}}'.");
-    
+
     return { kind: "if", condition, thenBranch, otherwise };
   }
 
   private parseEach(): EachNode {
-    const items = this.parseExpr();
+    const items = this.parseAccessor();
     this.consume("as", "Expected 'as' in each block.");
     this.consume("pipe", "Expected '|' after 'as'.");
     const asToken = this.consume("identifier", "Expected item name.");
@@ -126,9 +149,9 @@ class Parser {
   }
 
   private parsePartial(): PartialNode {
-    let name: string | ExprNode;
+    let name: string | AccessorNode;
     if (this.match("open-paren")) {
-      name = this.parseExpr();
+      name = this.parseAccessor();
       this.consume("close-paren", "Expected ')' after dynamic partial name.");
     } else if (this.match("identifier")) {
       const prev = this.previous();
@@ -140,8 +163,12 @@ class Parser {
       }
       name = path.join(".");
     } else {
-      throw new ParseError("Expected a partial name or a dynamic expression.", this.peek().position);
+      throw new ParseError(
+        "Expected a partial name or a dynamic expression.",
+        this.peek().position
+      );
     }
+    // Partials are always closed with `}}`
     this.consume("close-tag", "Expected '}}'.");
     return { kind: "partial", name };
   }
@@ -154,23 +181,30 @@ class Parser {
     } else {
       throw new ParseError("Expected a partial name.", this.peek().position);
     }
-    
-    const params: Record<string, ExprNode> = {};
+
+    const params: Record<string, AccessorNode> = {};
     if (this.match("with")) {
       do {
-        const paramToken = this.consume("identifier", "Expected parameter name.");
+        const paramToken = this.consume(
+          "identifier",
+          "Expected parameter name."
+        );
         const paramName = isIdentifierToken(paramToken) ? paramToken.value : "";
         this.consume("equals", "Expected '=' after parameter name.");
-        const value = this.parseExpr();
+        const value = this.parseAccessor();
         params[paramName] = value;
       } while (this.match("comma"));
     }
-    
+
     this.consume("close-tag", "Expected '}}'.");
-    return { kind: "partial", name, params: Object.keys(params).length > 0 ? params : undefined };
+    return {
+      kind: "partial",
+      name,
+      params: Object.keys(params).length > 0 ? params : undefined,
+    };
   }
 
-  private parseExpr(): ExprNode {
+  private parseAccessor(): AccessorNode {
     const firstToken = this.consume("identifier", "Expected identifier.");
     const path = [isIdentifierToken(firstToken) ? firstToken.value : ""];
     while (this.match("dot")) {
@@ -183,7 +217,7 @@ class Parser {
       const pipeToken = this.consume("identifier", "Expected pipe name.");
       pipes.push(isIdentifierToken(pipeToken) ? pipeToken.value : "");
     }
-    return { kind: "expr", path, pipes };
+    return { kind: "accessor", path, pipes };
   }
 
   private match(...types: Token["type"][]): boolean {
@@ -205,9 +239,9 @@ class Parser {
     if (this.isAtEnd()) return false;
     return this.peek().type === type;
   }
-  
+
   private peekNextType(): Token["type"] | null {
-      return this.tokens[this.pos + 1]?.type ?? null;
+    return this.tokens[this.pos + 1]?.type ?? null;
   }
 
   private advance(): Token {
@@ -224,7 +258,10 @@ class Parser {
   }
 
   private previous(): Token {
-    return this.tokens[this.pos - 1] ?? { type: "eof", position: this.src.length };
+    return this.tokens[this.pos - 1] ?? {
+      type: "eof",
+      position: this.src.length,
+    };
   }
 }
 

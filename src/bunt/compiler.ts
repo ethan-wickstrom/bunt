@@ -2,11 +2,12 @@ import { parse } from "./parser";
 import type {
   AST,
   CompileResult,
-  ExprNode,
+  AccessorNode,
   TextNode,
   IfNode,
   EachNode,
   PartialNode,
+  InterpolationNode,
   RenderOptions,
   Helpers,
 } from "./types";
@@ -35,7 +36,12 @@ export function compile(
     });
   }
 
-  const compiler = new Compiler(templateId, parsed.value, options.helpers ?? {}, options.target ?? "module");
+  const compiler = new Compiler(
+    templateId,
+    parsed.value,
+    options.helpers ?? {},
+    options.target ?? "module"
+  );
   return compiler.compile();
 }
 
@@ -45,7 +51,12 @@ class Compiler {
   private readonly allHelpers: Helpers;
   private readonly target: "module" | "jit";
 
-  constructor(templateId: string, ast: AST, customHelpers: Helpers, target: "module" | "jit") {
+  constructor(
+    templateId: string,
+    ast: AST,
+    customHelpers: Helpers,
+    target: "module" | "jit"
+  ) {
     this.templateId = templateId;
     this.ast = ast;
     this.allHelpers = { ...standardHelpers, ...customHelpers };
@@ -84,10 +95,14 @@ class Compiler {
     for (const node of ast) {
       const snippet = match(node)
         .with({ kind: "text" }, (node) => this.compileTextNode(node))
-        .with({ kind: "expr" }, (node) => this.compileExprNode(node, scope))
+        .with({ kind: "interpolation" }, (node) =>
+          this.compileInterpolationNode(node, scope)
+        )
         .with({ kind: "if" }, (node) => this.compileIfNode(node, scope))
         .with({ kind: "each" }, (node) => this.compileEachNode(node, scope))
-        .with({ kind: "partial" }, (node) => this.compilePartialNode(node, scope))
+        .with({ kind: "partial" }, (node) =>
+          this.compilePartialNode(node, scope)
+        )
         .exhaustive();
       builder = builder.add(snippet);
     }
@@ -98,38 +113,57 @@ class Compiler {
     return JSON.stringify(node.text);
   }
 
-  private compileExprNode(node: ExprNode, scope: string[]): string {
-    return this.compileExpr(node, scope);
+  private compileInterpolationNode(
+    node: InterpolationNode,
+    scope: string[]
+  ): string {
+    const code = this.compileAccessor(node.expr, scope);
+    if (node.raw) {
+      return code;
+    }
+    return `helpers.escapeHtml(${code})`;
   }
 
   private compileIfNode(node: IfNode, scope: string[]): string {
-    const cond = this.compileExpr(node.condition, scope, false);
+    const cond = this.compileAccessor(node.condition, scope, false);
     const thenCode = this.compileAst(node.thenBranch, scope);
-    const elseCode = node.otherwise ? this.compileAst(node.otherwise, scope) : '""';
+    const elseCode = node.otherwise
+      ? this.compileAst(node.otherwise, scope)
+      : '""';
     return `(${cond} ? ${thenCode} : ${elseCode})`;
   }
 
   private compileEachNode(node: EachNode, scope: string[]): string {
-    const itemsCode = this.compileExpr(node.items, scope, false);
-    const newScope = node.index ? [...scope, node.as, node.index] : [...scope, node.as];
+    const itemsCode = this.compileAccessor(node.items, scope, false);
+    const newScope = node.index
+      ? [...scope, node.as, node.index]
+      : [...scope, node.as];
     const bodyCode = this.compileAst(node.body, newScope);
     const params = node.index ? `${node.as}, ${node.index}` : node.as;
     return `(${itemsCode} || []).map((${params}) => ${bodyCode}).join("")`;
   }
 
   private compilePartialNode(node: PartialNode, scope: string[]): string {
-    const nameCode = typeof node.name === 'string'
-      ? JSON.stringify(node.name)
-      : this.compileExpr(node.name, scope, false);
-    
+    const nameCode =
+      typeof node.name === "string"
+        ? JSON.stringify(node.name)
+        : this.compileAccessor(node.name, scope, false);
+
     let contextCode = "ctx";
     if (node.params) {
       const paramEntries = Object.entries(node.params)
-        .map(([key, expr]) => `${JSON.stringify(key)}: ${this.compileExpr(expr, scope, false)}`)
+        .map(
+          ([key, expr]) =>
+            `${JSON.stringify(key)}: ${this.compileAccessor(
+              expr,
+              scope,
+              false
+            )}`
+        )
         .join(", ");
       contextCode = `{ ...ctx, ${paramEntries} }`;
     }
-    
+
     // This implementation is for JIT mode. AOT mode would require a different strategy.
     return `(() => {
       const partialName = ${nameCode};
@@ -142,42 +176,46 @@ class Compiler {
     })()`;
   }
 
-  private compileExpr(expr: ExprNode, scope: string[], withWrapper = true): string {
+  private compileAccessor(
+    expr: AccessorNode,
+    scope: string[],
+    withWrapper = true
+  ): string {
     const first = expr.path[0];
     const isHelper = first && Object.hasOwn(this.allHelpers, first);
     const isScoped = first && scope.includes(first);
-    
+
     // Handle helper functions that might take additional arguments
     if (isHelper && expr.path.length > 1) {
       // For helpers like truncate(value, length), we need to handle the arguments
       const helperName = first;
       const args = expr.path.slice(1).join(", ");
       let code = `helpers.${helperName}`;
-      
+
       // Apply any pipes to the helper result
       for (const pipe of expr.pipes) {
         code = `helpers.${pipe}(${code}(${args}))`;
       }
-      
+
       if (withWrapper) {
         return `(() => { const result = ${code}; return result !== undefined && result !== null ? result : (() => { throw new Error('Helper ${helperName} returned null/undefined'); })(); })()`;
       }
       return code;
     }
-    
+
     let code = isScoped
       ? expr.path.join(".")
       : isHelper && expr.path.length === 1
       ? `helpers.${first}`
       : `ctx.${expr.path.join(".")}`;
-    
+
     for (const pipe of expr.pipes) {
       code = `helpers.${pipe}(${code})`;
     }
-    
+
     if (withWrapper) {
       // Use single quotes for the error message to avoid nested backtick issues
-      const pathStr = expr.path.join('.')
+      const pathStr = expr.path.join(".");
       return `(${code} !== undefined && ${code} !== null ? ${code} : (() => { throw new Error('Missing ${pathStr}'); })())`;
     }
     return code;

@@ -164,7 +164,7 @@ describe("Compiler Helper Functions", () => {
       const result = compile("{{#each users as |user|}}{{#if user.isActive}}{{user.name}}{{/if}}{{/each}}");
       expect(result.isOk()).toBe(true);
       if (result.isOk()) {
-        expect(result.value.source).toContain("(user.isActive ? (user.name !== undefined && user.name !== null ? user.name");
+        expect(result.value.source).toContain("(user.isActive ? helpers.escapeHtml((user.name !== undefined && user.name !== null ? user.name");
       }
     });
 

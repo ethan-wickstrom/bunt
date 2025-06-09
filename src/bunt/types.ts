@@ -6,20 +6,27 @@ export type TextNode = {
   text: string;
 };
 
-/** An interpolation expression segment. */
-export type ExprNode = {
-  kind: "expr";
+/** A data access expression. */
+export type AccessorNode = {
+  kind: "accessor";
   /** Dot-path for property access, e.g. ["user","name"] */
   path: string[];
   /** Piped helpers, e.g. ["trim","upper"] */
   pipes: string[];
 };
 
+/** An interpolation expression segment. */
+export type InterpolationNode = {
+  kind: "interpolation";
+  expr: AccessorNode;
+  raw: boolean;
+};
+
 /** A conditional block. */
 export type IfNode = {
   kind: "if";
   /** The expression to evaluate. */
-  condition: ExprNode;
+  condition: AccessorNode;
   /** The AST to render if the condition is truthy. */
   thenBranch: AST;
   /** The AST to render if the condition is falsy. */
@@ -30,7 +37,7 @@ export type IfNode = {
 export type EachNode = {
   kind: "each";
   /** The expression for the array to iterate over. */
-  items: ExprNode;
+  items: AccessorNode;
   /** The alias for the item in the loop. */
   as: string;
   /** The alias for the index in the loop. */
@@ -43,13 +50,15 @@ export type EachNode = {
 export type PartialNode = {
   kind: "partial";
   /** Name or path of the partial to include. Can be a literal string or a dynamic expression. */
-  name: string | ExprNode;
+  name: string | AccessorNode;
   /** Optional context/parameters to pass. */
-  params?: Record<string, ExprNode>;
+  params?: Record<string, AccessorNode>;
 };
 
 /** Full template AST. */
-export type AST = Array<TextNode | ExprNode | IfNode | EachNode | PartialNode>;
+export type AST = Array<
+  TextNode | InterpolationNode | IfNode | EachNode | PartialNode
+>;
 
 /** A generic context object for type-safe templates. */
 export type Ctx = Record<string, unknown>;

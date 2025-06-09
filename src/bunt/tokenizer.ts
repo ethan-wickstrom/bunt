@@ -5,6 +5,8 @@ export type Token =
   | { type: "text"; value: string; position: number }
   | { type: "open-tag"; position: number }
   | { type: "close-tag"; position: number }
+  | { type: "open-triple-tag"; position: number }
+  | { type: "close-triple-tag"; position: number }
   | { type: "identifier"; value: string; position: number }
   | { type: "if"; position: number }
   | { type: "each"; position: number }
@@ -28,6 +30,8 @@ export const Token = {
   text: (value: string, position: number): Token => ({ type: "text", value, position }),
   openTag: (position: number): Token => ({ type: "open-tag", position }),
   closeTag: (position: number): Token => ({ type: "close-tag", position }),
+  openTripleTag: (position: number): Token => ({ type: "open-triple-tag", position }),
+  closeTripleTag: (position: number): Token => ({ type: "close-triple-tag", position }),
   identifier: (value: string, position: number): Token => ({ type: "identifier", value, position }),
   if: (position: number): Token => ({ type: "if", position }),
   each: (position: number): Token => ({ type: "each", position }),
@@ -81,11 +85,13 @@ export class Tokenizer {
    */
   public tokenize(): Result<Token[], TokenizerError> {
     while (this.pos < this.src.length) {
-      if (this.src.slice(this.pos).startsWith("{{")) {
-        const scanResult = this.scanTag();
-        if (scanResult.isErr()) {
-          return err(scanResult.error);
-        }
+      const remaining = this.src.slice(this.pos);
+      if (remaining.startsWith("{{{")) {
+        const scanResult = this.scanTag(true);
+        if (scanResult.isErr()) return err(scanResult.error);
+      } else if (remaining.startsWith("{{")) {
+        const scanResult = this.scanTag(false);
+        if (scanResult.isErr()) return err(scanResult.error);
       } else {
         this.scanText();
       }
@@ -96,23 +102,32 @@ export class Tokenizer {
 
   private scanText(): void {
     const start = this.pos;
-    const end = this.src.indexOf("{{", this.pos);
-    const text = this.src.slice(this.pos, end === -1 ? this.src.length : end);
+    let end = this.src.indexOf("{{", this.pos);
+    // If '{{' is not found, the text runs to the end of the string.
+    if (end === -1) {
+      end = this.src.length;
+    }
+    const text = this.src.slice(this.pos, end);
     if (text) {
       this.tokens.push(Token.text(text, start));
     }
-    this.pos = end === -1 ? this.src.length : end;
+    this.pos = end;
   }
 
-  private scanTag(): Result<void, TokenizerError> {
+  private scanTag(isTriple: boolean): Result<void, TokenizerError> {
     const tagStart = this.pos;
-    this.tokens.push(Token.openTag(this.pos));
-    this.pos += 2;
-    
+    const openToken = isTriple ? Token.openTripleTag : Token.openTag;
+    const closeStr = isTriple ? "}}}" : "}}";
+    const openLen = isTriple ? 3 : 2;
+
+    this.tokens.push(openToken(this.pos));
+    this.pos += openLen;
+
     while (this.pos < this.src.length) {
-      if (this.src.slice(this.pos).startsWith("}}")) {
-        this.pos += 2;
-        this.tokens.push(Token.closeTag(this.pos - 2));
+      if (this.src.slice(this.pos).startsWith(closeStr)) {
+        this.pos += openLen;
+        const closeToken = isTriple ? Token.closeTripleTag : Token.closeTag;
+        this.tokens.push(closeToken(this.pos - openLen));
         return ok(undefined);
       }
 
@@ -205,10 +220,10 @@ export class Tokenizer {
       }
     }
 
-    // For parser compatibility, use the parser's error message
+    const expected = isTriple ? "}}}" : "}}";
     return err({
       type: "unclosed-tag",
-      message: "Expected '}}' after expression.",
+      message: `Expected '${expected}' after expression.`,
       position: tagStart,
     });
   }
