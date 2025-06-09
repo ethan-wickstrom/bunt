@@ -26,5 +26,6 @@
     "noUnusedParameters": true,
     "noPropertyAccessFromIndexSignature": false
   },
-  "include": ["src/**/*"]
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist", "build", "coverage", "public", "src/bunt/.bunt-cache"]
 }

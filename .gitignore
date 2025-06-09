@@ -1,3 +1,5 @@
+# Bunt template cache
+src/bunt/.bunt-cache/
 # dependencies (bun install)
 node_modules
 
