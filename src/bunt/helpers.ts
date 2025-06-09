@@ -41,3 +41,6 @@ export const standardHelpers = {
 };
 
 export type StandardHelpers = typeof standardHelpers;
+
+/** Helper function signatures for type checking */
+export type HelperFunction = (...args: unknown[]) => unknown;

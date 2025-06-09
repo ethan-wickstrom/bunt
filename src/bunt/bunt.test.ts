@@ -186,13 +186,15 @@ describe("Bunt Templating Engine", () => {
     });
 
     it("should allow custom helpers", async () => {
-        const tpl = "{{ name |> exclaim }}";
-        const data = {
-            name: "World",
-            exclaim: (s: string) => `${s}!!!`,
-        };
-        const output = await render(tpl, data);
-        expect(output).toBe("World!!!");
+      const tpl = "{{ name |> exclaim }}";
+      const data = { name: "World" };
+      const options = {
+        helpers: {
+          exclaim: (s: string) => `${s}!!!`,
+        },
+      };
+      const output = await render(tpl, data, options);
+      expect(output).toBe("World!!!");
     });
 
     it("should throw an error for missing values", async () => {

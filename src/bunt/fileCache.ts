@@ -1,7 +1,7 @@
 import { writeFile, unlink } from "node:fs/promises";
 import { join, resolve, relative, dirname } from "node:path";
 import { existsSync } from "node:fs";
-import type { Ctx, CompileSuccess } from "./types";
+import type { CompileSuccess } from "./types";
 import type { RenderFn } from "./cache";
 
 /**
@@ -58,8 +58,11 @@ export async function loadFromDiskCache(key: string, compiled: CompileSuccess): 
     if (!bundledFile) throw new Error("Bundled file path not found");
 
     // Import the bundled file dynamically, appending a timestamp to bypass module cache
-    const module = await import(`${bundledFile}?t=${Date.now()}`);
-    return module.default as (ctx: Ctx) => string;
+    const module: { default: unknown } = await import(`${bundledFile}?t=${Date.now()}`);
+    if (typeof module.default !== "function") {
+      throw new Error(`Template ${key} did not export a default function.`);
+    }
+    return module.default as RenderFn;
   } finally {
     // Clean up the temporary source file (not the final bundle)
     await unlink(cacheFile).catch(() => {});

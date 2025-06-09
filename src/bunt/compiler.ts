@@ -1,5 +1,14 @@
 import { parse } from "./parser";
-import type { AST, CompileResult, ExprNode, TextNode, IfNode, EachNode } from "./types";
+import type {
+  AST,
+  CompileResult,
+  ExprNode,
+  TextNode,
+  IfNode,
+  EachNode,
+  RenderOptions,
+  Helpers,
+} from "./types";
 import { ok, err } from "neverthrow";
 import { match } from "ts-pattern";
 import { standardHelpers } from "./helpers";
@@ -10,10 +19,12 @@ import { CodeBuilder } from "./codeBuilder";
  *
  * @param src         The raw template source.
  * @param templateId  Identifier used in generated type/function names.
+ * @param options     Compilation options, including custom helpers.
  */
 export function compile(
   src: string,
-  templateId: string = "Template"
+  templateId: string = "Template",
+  options: RenderOptions = {}
 ): CompileResult {
   const parsed = parse(src);
   if (parsed.isErr()) {
@@ -23,17 +34,19 @@ export function compile(
     });
   }
 
-  const compiler = new Compiler(templateId, parsed.value);
+  const compiler = new Compiler(templateId, parsed.value, options.helpers ?? {});
   return compiler.compile();
 }
 
 class Compiler {
   private readonly templateId: string;
   private readonly ast: AST;
+  private readonly allHelpers: Helpers;
 
-  constructor(templateId: string, ast: AST) {
+  constructor(templateId: string, ast: AST, customHelpers: Helpers) {
     this.templateId = templateId;
     this.ast = ast;
+    this.allHelpers = { ...standardHelpers, ...customHelpers };
   }
 
   public compile(): CompileResult {
@@ -41,9 +54,9 @@ class Compiler {
     const fnName = `render_${this.templateId.replace(/[^\w]/g, "_")}`;
     const source = [
       'import { standardHelpers } from "../helpers";',
-      'import type { Ctx } from "../types";',
-      `export default function ${fnName}(ctx: Ctx): string {`,
-      "  const helpers = { ...standardHelpers, ...ctx };",
+      'import type { Ctx, Helpers } from "../types";',
+      `export default function ${fnName}(ctx: Ctx, customHelpers: Helpers = {}): string {`,
+      "  const helpers = { ...standardHelpers, ...customHelpers };",
       `  return ${body};`,
       "}",
       "",
@@ -90,16 +103,37 @@ class Compiler {
 
   private compileExpr(expr: ExprNode, scope: string[], withWrapper = true): string {
     const first = expr.path[0];
-    const isHelper = first && Object.hasOwn(standardHelpers, first);
+    const isHelper = first && Object.hasOwn(this.allHelpers, first);
     const isScoped = first && scope.includes(first);
+    
+    // Handle helper functions that might take additional arguments
+    if (isHelper && expr.path.length > 1) {
+      // For helpers like truncate(value, length), we need to handle the arguments
+      const helperName = first;
+      const args = expr.path.slice(1).join(", ");
+      let code = `helpers.${helperName}`;
+      
+      // Apply any pipes to the helper result
+      for (const pipe of expr.pipes) {
+        code = `helpers.${pipe}(${code}(${args}))`;
+      }
+      
+      if (withWrapper) {
+        return `(() => { const result = ${code}; return result !== undefined && result !== null ? result : (() => { throw new Error('Helper ${helperName} returned null/undefined'); })(); })()`;
+      }
+      return code;
+    }
+    
     let code = isScoped
       ? expr.path.join(".")
       : isHelper && expr.path.length === 1
       ? `helpers.${first}`
       : `ctx.${expr.path.join(".")}`;
+    
     for (const pipe of expr.pipes) {
       code = `helpers.${pipe}(${code})`;
     }
+    
     if (withWrapper) {
       // Use single quotes for the error message to avoid nested backtick issues
       const pathStr = expr.path.join('.')

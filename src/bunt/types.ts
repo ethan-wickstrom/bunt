@@ -61,5 +61,13 @@ export type CompileFailure = {
   position?: number;
 };
 
+/** A map of helper functions. */
+export type Helpers = Record<string, (...args: never[]) => unknown>;
+
+/** Options for the render function. */
+export type RenderOptions = {
+  helpers?: Helpers;
+};
+
 /** Result type for compile(). */
 export type CompileResult = Result<CompileSuccess, CompileFailure>;

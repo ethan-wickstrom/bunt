@@ -1,6 +1,6 @@
-import type { Ctx } from "./types";
+import type { Ctx, Helpers } from "./types";
 
-export type RenderFn = (ctx: Ctx) => string;
+export type RenderFn = (ctx: Ctx, helpers?: Helpers) => string;
 
 class TemplateCache {
   private readonly max = 128;
