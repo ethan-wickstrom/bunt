@@ -7,7 +7,7 @@
 	},
 	"files": {
 		"ignoreUnknown": true,
-		"ignore": []
+		"ignore": ["examples"]
 	},
 	"formatter": {
 		"enabled": true,
