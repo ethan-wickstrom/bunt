@@ -67,27 +67,3 @@ export type CompileFailure = {
 
 /** Result type for compile(). */
 export type CompileResult = Result<CompileSuccess, CompileFailure>;
-
-export enum TokenType {
-  Text = "Text",
-  OpenTag = "OpenTag",
-  CloseTag = "CloseTag",
-  Identifier = "Identifier",
-  If = "If",
-  Each = "Each",
-  Else = "Else",
-  As = "As",
-  Pipe = "Pipe",
-  Dot = "Dot",
-  Slash = "Slash",
-  Comma = "Comma",
-  GreaterThan = "GreaterThan",
-  Hash = "Hash",
-  EOF = "EOF",
-}
-
-export type Token = {
-  type: TokenType;
-  value: string;
-  position: number;
-};
