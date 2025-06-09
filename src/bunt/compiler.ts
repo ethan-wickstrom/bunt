@@ -69,7 +69,7 @@ class Compiler {
 
     if (this.target === "jit") {
       const source = [
-        `return function ${fnName}(ctx, options = {}) {`,
+        `return async function ${fnName}(ctx, options = {}) {`,
         "  const helpers = { ...standardHelpers, ...options.helpers };",
         `  return ${body};`,
         "}",
@@ -81,7 +81,7 @@ class Compiler {
       'import { standardHelpers } from "./helpers";',
       'import { render } from "./runtime";',
       'import type { Ctx, RenderOptions } from "./types";',
-      `export default function ${fnName}(ctx: Ctx, options: RenderOptions = {}): string {`,
+      `export default async function ${fnName}(ctx: Ctx, options: RenderOptions = {}): Promise<string> {`,
       "  const helpers = { ...standardHelpers, ...options.helpers };",
       `  return ${body};`,
       "}",
@@ -164,16 +164,20 @@ class Compiler {
       contextCode = `{ ...ctx, ${paramEntries} }`;
     }
 
-    // This implementation is for JIT mode. AOT mode would require a different strategy.
-    return `(() => {
+    return `(await (async () => {
       const partialName = ${nameCode};
-      const partialTpl = options.partials?.[partialName];
+      let partialTpl = options.partials?.[partialName];
+      if (typeof partialTpl !== "string" && options.partialResolver) {
+        partialTpl = await options.partialResolver(partialName);
+        if (typeof partialTpl === "string") {
+          options.partials = { ...(options.partials ?? {}), [partialName]: partialTpl };
+        }
+      }
       if (typeof partialTpl !== 'string') {
         throw new Error(\`Partial '\${partialName}' not found or is not a string.\`);
       }
-      // We need to call the top-level render function recursively
       return render(partialTpl, ${contextCode}, options);
-    })()`;
+    })())`;
   }
 
   private compileAccessor(
