@@ -67,6 +67,12 @@ export type Helpers = Record<string, (...args: never[]) => unknown>;
 /** Options for the render function. */
 export type RenderOptions = {
   helpers?: Helpers;
+  /**
+   * The compilation target.
+   * 'module' - generates a full ES module (for pre-compilation).
+   * 'jit' - generates a function body for just-in-time compilation.
+   */
+  target?: "module" | "jit";
 };
 
 /** Result type for compile(). */

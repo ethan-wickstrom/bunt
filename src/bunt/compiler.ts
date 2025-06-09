@@ -34,7 +34,7 @@ export function compile(
     });
   }
 
-  const compiler = new Compiler(templateId, parsed.value, options.helpers ?? {});
+  const compiler = new Compiler(templateId, parsed.value, options.helpers ?? {}, options.target ?? "module");
   return compiler.compile();
 }
 
@@ -42,16 +42,29 @@ class Compiler {
   private readonly templateId: string;
   private readonly ast: AST;
   private readonly allHelpers: Helpers;
+  private readonly target: "module" | "jit";
 
-  constructor(templateId: string, ast: AST, customHelpers: Helpers) {
+  constructor(templateId: string, ast: AST, customHelpers: Helpers, target: "module" | "jit") {
     this.templateId = templateId;
     this.ast = ast;
     this.allHelpers = { ...standardHelpers, ...customHelpers };
+    this.target = target;
   }
 
   public compile(): CompileResult {
     const body = this.compileAst(this.ast, []);
     const fnName = `render_${this.templateId.replace(/[^\w]/g, "_")}`;
+
+    if (this.target === "jit") {
+      const source = [
+        `return function ${fnName}(ctx, customHelpers = {}) {`,
+        "  const helpers = { ...standardHelpers, ...customHelpers };",
+        `  return ${body};`,
+        "}",
+      ].join("\n");
+      return ok({ source, fnName });
+    }
+
     const source = [
       'import { standardHelpers } from "../helpers";',
       'import type { Ctx, Helpers } from "../types";',

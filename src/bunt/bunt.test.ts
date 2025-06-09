@@ -96,42 +96,42 @@ describe("Bunt Templating Engine", () => {
   });
 
   describe("Runtime", () => {
-    it("should render a simple template", async () => {
-      const output = await render("Hello, {{name}}!", { name: "World" });
+    it("should render a simple template", () => {
+      const output = render("Hello, {{name}}!", { name: "World" });
       expect(output).toBe("Hello, World!");
     });
 
-    it("should render conditionals", async () => {
+    it("should render conditionals", () => {
       const tpl = "{{#if user.isLoggedIn}}Welcome, {{user.name}}{{else}}Please log in.{{/if}}";
-      const output1 = await render(tpl, { user: { isLoggedIn: true, name: "Cline" } });
+      const output1 = render(tpl, { user: { isLoggedIn: true, name: "Cline" } });
       expect(output1).toBe("Welcome, Cline");
-      const output2 = await render(tpl, { user: { isLoggedIn: false } });
+      const output2 = render(tpl, { user: { isLoggedIn: false } });
       expect(output2).toBe("Please log in.");
     });
 
-    it("should render nested conditionals", async () => {
+    it("should render nested conditionals", () => {
       const tpl = "{{#if a}}A{{#if b}}B{{/if}}{{else}}C{{/if}}";
-      const output1 = await render(tpl, { a: true, b: true });
+      const output1 = render(tpl, { a: true, b: true });
       expect(output1).toBe("AB");
-      const output2 = await render(tpl, { a: true, b: false });
+      const output2 = render(tpl, { a: true, b: false });
       expect(output2).toBe("A");
-      const output3 = await render(tpl, { a: false, b: true });
+      const output3 = render(tpl, { a: false, b: true });
       expect(output3).toBe("C");
     });
 
-    it("should render loops", async () => {
+    it("should render loops", () => {
       const tpl = "{{#each users as |user|}}{{user.name}}, {{/each}}";
-      const output = await render(tpl, { users: [{ name: "Alice" }, { name: "Bob" }] });
+      const output = render(tpl, { users: [{ name: "Alice" }, { name: "Bob" }] });
       expect(output).toBe("Alice, Bob, ");
     });
 
-    it("should render an empty string for loops with empty arrays", async () => {
+    it("should render an empty string for loops with empty arrays", () => {
       const tpl = "{{#each users as |user|}}{{user.name}}, {{/each}}";
-      const output = await render(tpl, { users: [] });
+      const output = render(tpl, { users: [] });
       expect(output).toBe("");
     });
 
-    it("should render nested loops", async () => {
+    it("should render nested loops", () => {
       const tpl = "{{#each items as |item|}}[{{#each item.sub as |s|}}{{s}},{{/each}}]{{/each}}";
       const data = {
         items: [
@@ -139,21 +139,21 @@ describe("Bunt Templating Engine", () => {
           { sub: [3, 4] },
         ],
       };
-      const output = await render(tpl, data);
+      const output = render(tpl, data);
       expect(output).toBe("[1,2,][3,4,]");
     });
 
-    it("should render loops with an index", async () => {
+    it("should render loops with an index", () => {
         const tpl = "{{#each users as |user, i|}}{{i}}:{{user.name}} {{/each}}";
-        const output = await render(tpl, { users: [{ name: "Alice" }, { name: "Bob" }] });
+        const output = render(tpl, { users: [{ name: "Alice" }, { name: "Bob" }] });
         expect(output).toBe("0:Alice 1:Bob ");
     });
 
-    it("should throw an error for 'each' over a non-array", async () => {
+    it("should throw an error for 'each' over a non-array", () => {
         const tpl = "{{#each users as |user|}}{{user.name}}, {{/each}}";
         let didThrow = false;
         try {
-            await render(tpl, { users: { not: "an array" } });
+            render(tpl, { users: { not: "an array" } });
         } catch (e) {
             didThrow = true;
             expect(e).toBeInstanceOf(TypeError);
@@ -162,30 +162,30 @@ describe("Bunt Templating Engine", () => {
         expect(didThrow).toBe(true);
     });
 
-    it("should use pipe helpers", async () => {
-        const output = await render("{{ name |> upper }}", { name: "cline" });
+    it("should use pipe helpers", () => {
+        const output = render("{{ name |> upper }}", { name: "cline" });
         expect(output).toBe("CLINE");
     });
 
-    it("should use multiple pipe helpers", async () => {
-        const output = await render("{{ name |> lower |> capitalize }}", { name: "CLINE" });
+    it("should use multiple pipe helpers", () => {
+        const output = render("{{ name |> lower |> capitalize }}", { name: "CLINE" });
         expect(output).toBe("Cline");
     });
 
-    it("should escape html", async () => {
-        const output = await render("{{ content |> escapeHtml }}", { content: "<script>alert('xss')</script>" });
+    it("should escape html", () => {
+        const output = render("{{ content |> escapeHtml }}", { content: "<script>alert('xss')</script>" });
         expect(output).toBe("&lt;script&gt;alert(&#39;xss&#39;)&lt;/script&gt;");
     });
 
-    it("should use various standard helpers", async () => {
+    it("should use various standard helpers", () => {
         const tpl = '{{ a |> lower }}, {{ b |> capitalize }}, {{ c |> truncate }}, {{ d |> json }}, {{ e |> date }}';
         const date = new Date("2024-01-15T12:00:00.000Z");
         const data = { a: "HELLO", b: "world", c: "1234567890123456789012345", d: { x: 1 }, e: date };
-        const output = await render(tpl, data);
+        const output = render(tpl, data);
         expect(output).toBe(`hello, World, 12345678901234567890..., {"x":1}, ${date.toLocaleDateString()}`);
     });
 
-    it("should allow custom helpers", async () => {
+    it("should allow custom helpers", () => {
       const tpl = "{{ name |> exclaim }}";
       const data = { name: "World" };
       const options = {
@@ -193,14 +193,14 @@ describe("Bunt Templating Engine", () => {
           exclaim: (s: string) => `${s}!!!`,
         },
       };
-      const output = await render(tpl, data, options);
+      const output = render(tpl, data, options);
       expect(output).toBe("World!!!");
     });
 
-    it("should throw an error for missing values", async () => {
+    it("should throw an error for missing values", () => {
         let didThrow = false;
         try {
-            await render("{{name}}", {});
+            render("{{name}}", {});
         } catch (e) {
             didThrow = true;
             expect((e as Error).message).toContain("Missing name");
@@ -208,10 +208,10 @@ describe("Bunt Templating Engine", () => {
         expect(didThrow).toBe(true);
     });
 
-    it("should throw an error for unknown pipes", async () => {
+    it("should throw an error for unknown pipes", () => {
         let didThrow = false;
         try {
-            await render("{{ name |> foobar }}", { name: "test" });
+            render("{{ name |> foobar }}", { name: "test" });
         } catch (e) {
             didThrow = true;
             expect(e).toBeInstanceOf(TypeError);
