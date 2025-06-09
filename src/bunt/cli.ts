@@ -5,9 +5,9 @@ import { compile } from "./compiler";
 import { mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
 
-const USAGE = "Usage: bun-templates <glob>";
+const USAGE = "Usage: bunt <glob>";
 
-/** Simple CLI: `bun-templates <glob>` */
+/** Simple CLI: `bunt <glob>` */
 async function main() {
   const args = process.argv.slice(2);
   if (args.length === 0) {
