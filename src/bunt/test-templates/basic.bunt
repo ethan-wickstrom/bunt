@@ -1,0 +1,19 @@
+---
+type Props = {
+  name: string;
+  html: string;
+  items: string[];
+  show: boolean;
+};
+---
+Hello, <%= props.name %>!
+<%- props.html %>
+<% if (props.show) { %>
+<ul>
+<% for (const item of props.items) { %>
+  <li><%= item %></li>
+<% } %>
+</ul>
+<% } else { %>
+<p>Nothing to see here.</p>
+<% } %>

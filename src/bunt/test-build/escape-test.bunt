@@ -1,0 +1,4 @@
+---
+type Props = { html: string };
+---
+<%= props.html %>

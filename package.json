@@ -2,10 +2,21 @@
   "name": "bunt",
   "module": "src/index.ts",
   "type": "module",
+  "bin": {
+    "bunt": "src/bunt/cli.ts"
+  },
   "devDependencies": {
+    "@biomejs/biome": "1.9.4",
     "@types/bun": "latest"
   },
   "peerDependencies": {
     "typescript": "^5"
-  }
+  },
+  "dependencies": {
+    "neverthrow": "^8.2.0",
+    "ts-pattern": "^5.7.1"
+  },
+  "trustedDependencies": [
+    "@biomejs/biome"
+  ]
 }
