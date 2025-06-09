@@ -39,11 +39,16 @@ class Compiler {
   public compile(): CompileResult {
     const body = this.compileAst(this.ast, []);
     const fnName = `render_${this.templateId.replace(/[^\w]/g, "_")}`;
-    const helpersCode =
-      "const h={upper:v=>String(v).toUpperCase(),lower:v=>String(v).toLowerCase(),capitalize:v=>{const s=String(v);return s.charAt(0).toUpperCase()+s.slice(1)},truncate:(v,l=20)=>{const s=String(v);return s.length>l?s.slice(0,l)+'...':s},json:v=>JSON.stringify(v),date:(v,loc,opt)=>{const d=v instanceof Date?v:new Date(String(v));return d.toLocaleDateString(loc,opt)},escapeHtml:v=>String(v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\"/g,'&quot;').replace(/'/g,'&#39;')};";
-    const functionBody = `const helpers={...h,...ctx};return ${body}`;
-    const source = `${helpersCode}export function ${fnName}(ctx){${functionBody}}`;
-    return ok({ source, fnName, functionBody, helpersCode });
+    const source = [
+      'import { standardHelpers } from "../helpers";',
+      'import type { Ctx } from "../types";',
+      `export function ${fnName}(ctx: Ctx): string {`,
+      "  const helpers = { ...standardHelpers, ...ctx };",
+      `  return ${body};`,
+      "}",
+      "",
+    ].join("\n");
+    return ok({ source, fnName });
   }
 
   private compileAst(ast: AST, scope: string[]): string {

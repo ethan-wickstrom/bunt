@@ -51,10 +51,6 @@ export type CompileSuccess = {
   source: string;
   /** Name of the generated render function. */
   fnName: string;
-  /** The body of the render function, for use with new Function(). */
-  functionBody: string;
-  /** The JS code for the helpers object, for use with new Function(). */
-  helpersCode: string;
 };
 
 /** Failure payload from compile(). */
