@@ -201,7 +201,7 @@ describe("Bunt Templating Engine", () => {
             await render("{{name}}", {});
         } catch (e) {
             didThrow = true;
-            expect((e as Error).message).toContain("Missing `name`");
+            expect((e as Error).message).toContain("Missing name");
         }
         expect(didThrow).toBe(true);
     });
