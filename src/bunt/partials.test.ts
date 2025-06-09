@@ -9,7 +9,7 @@ describe("Bunt Partials", () => {
     const partialTpl = "World";
     const registry = new PartialRegistry();
     await registry.register("world", partialTpl);
-    const output = render(mainTpl, {}, registry.toOptions());
+    const output = await render(mainTpl, {}, registry.toOptions());
     expect(output).toBe("Hello, World!");
   });
 
@@ -18,7 +18,7 @@ describe("Bunt Partials", () => {
     const partialTpl = "Name: {{user.name}}";
     const registry = new PartialRegistry();
     await registry.register("userCard", partialTpl);
-    const output = render(mainTpl, { user: { name: "Alice" } }, registry.toOptions());
+    const output = await render(mainTpl, { user: { name: "Alice" } }, registry.toOptions());
     expect(output).toBe("Name: Alice");
   });
 
@@ -29,7 +29,7 @@ describe("Bunt Partials", () => {
     const registry = new PartialRegistry();
     await registry.register("A", partialA);
     await registry.register("B", partialB);
-    const output = render(mainTpl, {}, registry.toOptions());
+    const output = await render(mainTpl, {}, registry.toOptions());
     expect(output).toBe("A contains B");
   });
 
@@ -40,16 +40,16 @@ describe("Bunt Partials", () => {
     const registry = new PartialRegistry();
     await registry.register("p1", partial1);
     await registry.register("p2", partial2);
-    const output1 = render(mainTpl, { partialName: "p1" }, registry.toOptions());
-    const output2 = render(mainTpl, { partialName: "p2" }, registry.toOptions());
+    const output1 = await render(mainTpl, { partialName: "p1" }, registry.toOptions());
+    const output2 = await render(mainTpl, { partialName: "p2" }, registry.toOptions());
     expect(output1).toBe("Partial One");
     expect(output2).toBe("Partial Two");
   });
 
-  test("should throw an error for a missing partial", () => {
+  test("should throw an error for a missing partial", async () => {
     const mainTpl = "{{> missing }}";
     const registry = new PartialRegistry();
-    expect(() => render(mainTpl, {}, registry.toOptions())).toThrow("Partial 'missing' not found or is not a string.");
+    await expect(render(mainTpl, {}, registry.toOptions())).rejects.toThrow("Partial 'missing' not found or is not a string.");
   });
 
   test("should load partials from a directory", async () => {
@@ -61,7 +61,7 @@ describe("Bunt Partials", () => {
     await registry.registerDirectory("./test_partials");
 
     const mainTpl = "<div>{{> user.card }} - {{> footer }}</div>";
-    const output = render(mainTpl, { name: "Bob" }, registry.toOptions());
+    const output = await render(mainTpl, { name: "Bob" }, registry.toOptions());
     expect(output).toBe("<div>User: Bob - Copyright 2025</div>");
 
     // Cleanup

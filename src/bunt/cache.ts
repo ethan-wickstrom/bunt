@@ -1,6 +1,6 @@
 import type { Ctx, RenderOptions } from "./types";
 
-export type RenderFn = (ctx: Ctx, options?: RenderOptions) => string;
+export type RenderFn = (ctx: Ctx, options?: RenderOptions) => Promise<string>;
 
 class TemplateCache {
   private readonly max = 128;
