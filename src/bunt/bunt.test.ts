@@ -8,7 +8,7 @@ describe("Bunt Templating Engine", () => {
       const res = compile("Hello, {{name}}!");
       expect(res.isOk()).toBe(true);
       if (res.isOk()) {
-        expect(res.value.source).toContain("export function render_Template");
+        expect(res.value.source).toContain("export default function render_Template");
         expect(res.value.source).toContain('return "Hello, " + (ctx.name');
       }
     });
