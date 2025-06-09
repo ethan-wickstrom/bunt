@@ -1,42 +1,35 @@
 import { compile } from "./compiler";
+import { templateCache } from "./cache";
 import type { Ctx } from "./types";
-import { writeFileSync, unlinkSync } from "node:fs";
-import { join } from "node:path";
-import { tmpdir } from "node:os";
+
+function keyOf(tpl: string): string {
+  // Convert to base36 for shorter keys
+  const hash = Bun.hash.xxHash64(tpl);
+  return hash.toString(36);
+}
 
 /**
- * Dynamically render a template string at runtime (no build step).
- *
- * @param tpl  Template source.
- * @param ctx  Context object (keys must match expressions).
+ * Render a template entirely in-memory. Caches the transpiled function
+ * to avoid repeated transpilation or disk I/O.
  */
-export async function render(
-  tpl: string,
-  ctx: Ctx
-): Promise<string> {
-  const res = compile(tpl, "Runtime");
-  if (res.isErr()) throw new Error(res.error.message);
+export async function render(tpl: string, ctx: Ctx): Promise<string> {
+  const key = keyOf(tpl);
+  let fn = templateCache.get(key);
 
-  // Create a temporary file for the generated code
-  const tempFile = join(tmpdir(), `bunt-${Date.now()}-${Math.random().toString(36).slice(2)}.js`);
-  
-  try {
-    const transpiler = new Bun.Transpiler({ loader: "ts" });
-    const js = await transpiler.transform(res.value.source, "ts");
-    writeFileSync(tempFile, js);
+  if (!fn) {
+    const result = compile(tpl);
+    if (result.isErr()) throw new Error(result.error.message);
+
+    const { functionBody, helpersCode } = result.value;
     
-    const mod = await import(tempFile);
-    const fn = mod[res.value.fnName] as (ctx: Ctx) => string;
-    if (!fn) {
-      throw new Error(`Function ${res.value.fnName} not found in compiled module. Available: ${Object.keys(mod).join(', ')}`);
-    }
-    return fn(ctx);
-  } finally {
-    // Clean up the temporary file
-    try {
-      unlinkSync(tempFile);
-    } catch (e) {
-      // Ignore cleanup errors
-    }
+    // The full body for our new function. It will define helpers `h`
+    // and then execute the template logic.
+    const fullRenderBody = `${helpersCode}\n${functionBody}`;
+    
+    // Create the render function in-memory. It takes one argument: `ctx`.
+    fn = new Function("ctx", fullRenderBody) as (ctx: Ctx) => string;
+    templateCache.set(key, fn);
   }
+
+  return fn(ctx);
 }
